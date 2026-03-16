@@ -17,13 +17,11 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # Cài .NET 7 để chạy Otterkit tool
       - name: Setup .NET 7
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '7.0.x'
 
-      # Cài thêm .NET 8 để build project mới hơn / tránh warning EOL
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
@@ -49,7 +47,7 @@ jobs:
           which otterkit || true
           otterkit --version
 
-      - name: Create OOP COBOL source file if missing
+      - name: Create OOP COBOL source if missing
         run: |
           mkdir -p src
           if [ ! -f src/HELLO.cob ]; then
@@ -65,63 +63,58 @@ jobs:
               '' \
               '       END CLASS HELLO.' > src/HELLO.cob
           fi
+          echo "===== src ====="
           ls -la src
-          echo "===== HELLO.cob ====="
           cat src/HELLO.cob
 
-      - name: Create build folder
+      - name: Create Otterkit app skeleton
         run: |
           rm -rf build-app
-          mkdir -p build-app
-          ls -la
+          otterkit new app build-app
+          echo "===== build-app tree after otterkit new app ====="
+          find build-app -maxdepth 4 -type f | sort || true
 
-      - name: Copy COBOL source into build folder
+      - name: Replace default COBOL source with our file
         run: |
-          cp src/HELLO.cob build-app/main.cob
-          ls -la build-app
-          echo "===== main.cob ====="
-          cat build-app/main.cob
+          # tìm file .cob đầu tiên trong skeleton
+          COBFILE=$(find build-app -type f \( -name "*.cob" -o -name "*.cbl" \) | head -n 1)
+          echo "Found skeleton COBOL file: $COBFILE"
 
-      - name: Prepare Otterkit export project (Linux CI fix)
+          if [ -n "$COBFILE" ]; then
+            cp src/HELLO.cob "$COBFILE"
+          else
+            # fallback nếu template không có file sẵn
+            mkdir -p build-app/src
+            cp src/HELLO.cob build-app/src/HELLO.cob
+            COBFILE="src/HELLO.cob"
+          fi
+
+          echo "ENTRY_FILE=$COBFILE" >> $GITHUB_ENV
+
+          echo "===== final COBOL file ====="
+          cat "build-app/$COBFILE" 2>/dev/null || cat "$COBFILE"
+
+      - name: Show build-app layout before build
         run: |
-          mkdir -p build-app/.otterkit/OtterkitExport
+          echo "===== build-app layout ====="
+          find build-app -maxdepth 6 -type f | sort || true
 
-          cat > build-app/.otterkit/OtterkitExport/OtterkitExport.csproj <<'EOF'
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup>
-              <OutputType>Exe</OutputType>
-              <TargetFramework>net7.0</TargetFramework>
-              <ImplicitUsings>enable</ImplicitUsings>
-              <Nullable>enable</Nullable>
-              <SelfContained>false</SelfContained>
-            </PropertyGroup>
-
-            <ItemGroup>
-              <PackageReference Include="Otterkit.Runtime" Version="1.0.80" />
-            </ItemGroup>
-          </Project>
-          EOF
-
-          echo "===== CHECK EXPORT PROJECT ====="
-          ls -la build-app/.otterkit/OtterkitExport
-          cat build-app/.otterkit/OtterkitExport/OtterkitExport.csproj
-
-      - name: Build COBOL project
+      - name: Build with Otterkit
         run: |
           cd build-app
-          otterkit build -e main.cob --free
+          echo "Using entry file: ${ENTRY_FILE#build-app/}"
+          # normalize path if it already starts with build-app/
+          ENTRY="${ENTRY_FILE#build-app/}"
+          otterkit build -e "$ENTRY" --free
 
-      - name: Show generated files
+      - name: Show generated files after build
         if: always()
         run: |
-          echo "===== BUILD-APP TREE ====="
+          echo "===== build-app tree ====="
           find build-app -maxdepth 8 -type f | sort || true
 
-      - name: Show generated C# after build attempt
-        if: always()
-        run: |
-          echo "===== GENERATED FILES ====="
-          find build-app/.otterkit -maxdepth 4 -type f | sort || true
+          echo "===== search for OtterkitLibrary references ====="
+          grep -R "using OtterkitLibrary" -n build-app || true
 
           if [ -f build-app/.otterkit/OtterkitExport/HELLO.cs ]; then
             echo "===== HELLO.cs ====="
