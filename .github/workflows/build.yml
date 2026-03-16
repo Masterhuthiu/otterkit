@@ -1,4 +1,4 @@
-name: Build COBOL with Otterkit CLI
+name: Build OOP COBOL with Otterkit CLI
 
 on:
   push:
@@ -36,45 +36,57 @@ jobs:
           otterkit --version
           dotnet --info
 
-      - name: Create source file if missing
+      - name: Create OOP COBOL source file if missing
         run: |
           mkdir -p src
           if [ ! -f src/HELLO.cob ]; then
             printf '%s\n' \
-              'IDENTIFICATION DIVISION.' \
-              'PROGRAM-ID. HELLO.' \
+              '       IDENTIFICATION DIVISION.' \
+              '       CLASS-ID. HELLO.' \
               '' \
-              'PROCEDURE DIVISION.' \
-              '    DISPLAY "HELLO FROM OTTERKIT GITHUB ACTIONS".' \
-              '    STOP RUN.' > src/HELLO.cob
+              '       METHOD-ID. MAIN.' \
+              '       PROCEDURE DIVISION.' \
+              '           DISPLAY "HELLO FROM OOP COBOL WITH OTTERKIT".' \
+              '           GOBACK.' \
+              '       END METHOD MAIN.' \
+              '' \
+              '       END CLASS HELLO.' > src/HELLO.cob
           fi
           ls -la src
           echo "===== HELLO.cob ====="
           cat src/HELLO.cob
 
-      - name: Create Otterkit app project
+      - name: Create build folder
         run: |
           rm -rf build-app
           mkdir -p build-app
-          cd build-app
-          otterkit new app || true
-          ls -la
-          find . -maxdepth 4 -type f | sort || true
 
-      - name: Copy COBOL source into project
+      - name: Copy COBOL source into build folder
         run: |
           cp src/HELLO.cob build-app/main.cob
           ls -la build-app
           echo "===== main.cob ====="
           cat build-app/main.cob
 
-      - name: Prepare Otterkit export directory (Linux CI fix)
+      - name: Prepare Otterkit export project (Linux CI fix)
         working-directory: build-app
         run: |
           mkdir -p .otterkit/OtterkitExport
-          echo "===== CHECK .otterkit ====="
-          ls -la .otterkit || true
-          ls -la .otterkit/OtterkitExport || true
+
+          cat > .otterkit/OtterkitExport/OtterkitExport.csproj <<'EOF'
+          <Project Sdk="Microsoft.NET.Sdk">
+            <PropertyGroup>
+              <OutputType>Exe</OutputType>
+              <TargetFramework>net7.0</TargetFramework>
+              <ImplicitUsings>enable</ImplicitUsings>
+              <Nullable>enable</Nullable>
+            </PropertyGroup>
+          </Project>
+          EOF
+
+          echo "===== CHECK EXPORT PROJECT ====="
+          ls -la .otterkit/OtterkitExport
+          cat .otterkit/OtterkitExport/OtterkitExport.csproj
 
       - name: Build COBOL project
         working-directory: build-app
