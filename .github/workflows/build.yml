@@ -11,16 +11,29 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # Cài .NET 7 để chạy Otterkit tool
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      # Cài thêm .NET 8 để build project mới hơn / tránh warning EOL
       - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
+      - name: Verify installed runtimes
+        run: |
+          dotnet --info
+          dotnet --list-sdks
+          dotnet --list-runtimes
 
       - name: Install Otterkit templates
         run: dotnet new install Otterkit.Templates::1.7.50
@@ -33,8 +46,8 @@ jobs:
 
       - name: Verify Otterkit
         run: |
+          which otterkit || true
           otterkit --version
-          dotnet --info
 
       - name: Create OOP COBOL source file if missing
         run: |
@@ -60,6 +73,7 @@ jobs:
         run: |
           rm -rf build-app
           mkdir -p build-app
+          ls -la
 
       - name: Copy COBOL source into build folder
         run: |
@@ -69,15 +83,14 @@ jobs:
           cat build-app/main.cob
 
       - name: Prepare Otterkit export project (Linux CI fix)
-        working-directory: build-app
         run: |
-          mkdir -p .otterkit/OtterkitExport
+          mkdir -p build-app/.otterkit/OtterkitExport
 
-          cat > .otterkit/OtterkitExport/OtterkitExport.csproj <<'EOF'
+          cat > build-app/.otterkit/OtterkitExport/OtterkitExport.csproj <<'EOF'
           <Project Sdk="Microsoft.NET.Sdk">
             <PropertyGroup>
               <OutputType>Exe</OutputType>
-              <TargetFramework>net8.0</TargetFramework>
+              <TargetFramework>net7.0</TargetFramework>
               <ImplicitUsings>enable</ImplicitUsings>
               <Nullable>enable</Nullable>
               <SelfContained>false</SelfContained>
@@ -90,33 +103,35 @@ jobs:
           EOF
 
           echo "===== CHECK EXPORT PROJECT ====="
-          ls -la .otterkit/OtterkitExport
-          cat .otterkit/OtterkitExport/OtterkitExport.csproj
-
-      - name: Show generated C# before build
-        if: always()
-        working-directory: build-app
-        run: |
-          echo "===== GENERATED FILES BEFORE BUILD ====="
-          find .otterkit -maxdepth 4 -type f | sort || true
-          if [ -f .otterkit/OtterkitExport/HELLO.cs ]; then
-            echo "===== HELLO.cs ====="
-            sed -n '1,200p' .otterkit/OtterkitExport/HELLO.cs
-          fi
-          if [ -f .otterkit/OtterkitExport/Startup.cs ]; then
-            echo "===== Startup.cs ====="
-            sed -n '1,200p' .otterkit/OtterkitExport/Startup.cs
-          fi
+          ls -la build-app/.otterkit/OtterkitExport
+          cat build-app/.otterkit/OtterkitExport/OtterkitExport.csproj
 
       - name: Build COBOL project
-        working-directory: build-app
-        run: otterkit build -e main.cob --free
+        run: |
+          cd build-app
+          otterkit build -e main.cob --free
 
       - name: Show generated files
         if: always()
         run: |
           echo "===== BUILD-APP TREE ====="
           find build-app -maxdepth 8 -type f | sort || true
+
+      - name: Show generated C# after build attempt
+        if: always()
+        run: |
+          echo "===== GENERATED FILES ====="
+          find build-app/.otterkit -maxdepth 4 -type f | sort || true
+
+          if [ -f build-app/.otterkit/OtterkitExport/HELLO.cs ]; then
+            echo "===== HELLO.cs ====="
+            sed -n '1,200p' build-app/.otterkit/OtterkitExport/HELLO.cs
+          fi
+
+          if [ -f build-app/.otterkit/OtterkitExport/Startup.cs ]; then
+            echo "===== Startup.cs ====="
+            sed -n '1,200p' build-app/.otterkit/OtterkitExport/Startup.cs
+          fi
 
       - name: Upload artifacts
         if: always()
