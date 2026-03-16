@@ -17,10 +17,10 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Setup .NET 7
+      - name: Setup .NET 8
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '7.0.x'
+          dotnet-version: '8.0.x'
 
       - name: Install Otterkit templates
         run: dotnet new install Otterkit.Templates::1.7.50
@@ -74,19 +74,39 @@ jobs:
           mkdir -p .otterkit/OtterkitExport
 
           cat > .otterkit/OtterkitExport/OtterkitExport.csproj <<'EOF'
-          <Project Sdk="Microsoft.NET.Sdk">
-            <PropertyGroup>
-              <OutputType>Exe</OutputType>
-              <TargetFramework>net7.0</TargetFramework>
-              <ImplicitUsings>enable</ImplicitUsings>
-              <Nullable>enable</Nullable>
-            </PropertyGroup>
-          </Project>
-          EOF
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <SelfContained>false</SelfContained>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Otterkit.Runtime" Version="1.0.80" />
+  </ItemGroup>
+</Project>
+EOF
 
           echo "===== CHECK EXPORT PROJECT ====="
           ls -la .otterkit/OtterkitExport
           cat .otterkit/OtterkitExport/OtterkitExport.csproj
+
+      - name: Show generated C# before build
+        if: always()
+        working-directory: build-app
+        run: |
+          echo "===== GENERATED FILES BEFORE BUILD ====="
+          find .otterkit -maxdepth 4 -type f | sort || true
+          if [ -f .otterkit/OtterkitExport/HELLO.cs ]; then
+            echo "===== HELLO.cs ====="
+            sed -n '1,200p' .otterkit/OtterkitExport/HELLO.cs
+          fi
+          if [ -f .otterkit/OtterkitExport/Startup.cs ]; then
+            echo "===== Startup.cs ====="
+            sed -n '1,200p' .otterkit/OtterkitExport/Startup.cs
+          fi
 
       - name: Build COBOL project
         working-directory: build-app
