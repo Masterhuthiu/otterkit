@@ -1,19 +1,85 @@
-Run mkdir -p src
-  mkdir -p src
-  if [ ! -f src/HELLO.cob ]; then
-    cat > src/HELLO.cob <<'EOF'
-         IDENTIFICATION DIVISION.
-         PROGRAM-ID. HELLO.
-  
-         PROCEDURE DIVISION.
-             DISPLAY "HELLO FROM OTTERKIT GITHUB ACTIONS".
-             STOP RUN.
-    EOF
-  fi
-  ls -la src
-  shell: /usr/bin/bash -e {0}
-  env:
-    DOTNET_ROOT: /usr/share/dotnet
-/home/runner/work/_temp/bbf30644-d727-41f6-aa76-84e6cb4ecad6.sh: line 12: warning: here-document at line 3 delimited by end-of-file (wanted `EOF')
-/home/runner/work/_temp/bbf30644-d727-41f6-aa76-84e6cb4ecad6.sh: line 13: syntax error: unexpected end of file
-Error: Process completed with exit code 2.
+name: Build COBOL with Otterkit CLI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Install Otterkit templates
+        run: dotnet new install Otterkit.Templates::1.7.50
+
+      - name: Install Otterkit CLI
+        run: dotnet tool install --global Otterkit --version 1.0.80
+
+      - name: Add dotnet tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify Otterkit
+        run: otterkit --version
+
+      - name: Create source file if missing
+        run: |
+          mkdir -p src
+          if [ ! -f src/HELLO.cob ]; then
+            printf '%s\n' \
+              'IDENTIFICATION DIVISION.' \
+              'PROGRAM-ID. HELLO.' \
+              '' \
+              'PROCEDURE DIVISION.' \
+              '    DISPLAY "HELLO FROM OTTERKIT GITHUB ACTIONS".' \
+              '    STOP RUN.' > src/HELLO.cob
+          fi
+          ls -la src
+          echo "===== HELLO.cob ====="
+          cat src/HELLO.cob
+
+      - name: Create Otterkit app project
+        run: |
+          rm -rf build-app
+          mkdir -p build-app
+          cd build-app
+          otterkit new app
+          ls -la
+          find . -maxdepth 4 -type f | sort
+
+      - name: Copy COBOL source into project
+        run: |
+          cp src/HELLO.cob build-app/main.cob
+          ls -la build-app
+          echo "===== main.cob ====="
+          cat build-app/main.cob
+
+      - name: Build COBOL project
+        working-directory: build-app
+        run: otterkit build -e main.cob --free
+
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "===== BUILD-APP TREE ====="
+          find build-app -maxdepth 6 -type f | sort
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: otterkit-build-output
+          path: |
+            build-app/**
