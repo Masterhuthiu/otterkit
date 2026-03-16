@@ -179,14 +179,14 @@ jobs:
           dotnet --list-sdks
           dotnet --list-runtimes
 
-      - name: Install Otterkit templates (latest)
+      - name: Install Otterkit templates
         run: |
-          dotnet new install Otterkit.Templates::1.7.50
+          dotnet new install Otterkit.Templates::1.0.45-alpha
 
       - name: Install Otterkit tool
         run: |
-          dotnet tool install --global Otterkit.Tool --version 1.7.50 || \
-          dotnet tool update --global Otterkit.Tool --version 1.7.50
+          dotnet tool install --global Otterkit --version 1.0.80 || \
+          dotnet tool update --global Otterkit --version 1.0.80
 
           echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
 
@@ -195,18 +195,15 @@ jobs:
           export PATH="$PATH:$HOME/.dotnet/tools"
           otterkit --help || true
 
-      # Tạo workspace build sạch
       - name: Prepare build workspace
         run: |
           rm -rf build-app
           mkdir -p build-app/src
 
-      # Copy toàn bộ source tree nhiều file OOP
       - name: Copy all COBOL OOP sources
         run: |
           cp -R src/* build-app/src/
 
-          # File entry chính cho OOP project
           echo "ENTRY_FILE=src/Main.cob" >> $GITHUB_ENV
 
           echo "===== build-app/src tree ====="
@@ -218,21 +215,6 @@ jobs:
           echo "===== Main.cob content ====="
           cat build-app/src/Main.cob
 
-      # (Tuỳ chọn) tạo app skeleton nếu bạn muốn thử cho Otterkit có thêm context
-      # Nhưng KHÔNG dùng output của template vì trước đó bạn bị lỗi build-app không sinh như mong muốn
-      - name: Create Otterkit project metadata (best effort)
-        continue-on-error: true
-        run: |
-          export PATH="$PATH:$HOME/.dotnet/tools"
-
-          # Thử tạo ở thư mục tạm riêng để không phá build-app của mình
-          rm -rf temp-otterkit-app
-          otterkit new app temp-otterkit-app || true
-
-          echo "===== temp-otterkit-app (if any) ====="
-          find temp-otterkit-app -maxdepth 3 -type f 2>/dev/null || true
-
-      # Build / transpile từ COBOL -> C#
       - name: Transpile multi-file OOP COBOL with Otterkit
         run: |
           export PATH="$PATH:$HOME/.dotnet/tools"
@@ -243,13 +225,11 @@ jobs:
           echo "===== build-app tree before transpile ====="
           find . -type f -print
 
-          # Chạy transpile
           otterkit build -e "$ENTRY_FILE" --free || true
 
           echo "===== build-app tree after transpile ====="
           find . -type f -print
 
-      # Debug xem Otterkit sinh ra gì
       - name: Inspect generated files
         run: |
           echo "===== GENERATED FILES ====="
@@ -261,7 +241,6 @@ jobs:
           echo "===== Search for generated C# ====="
           find build-app -type f -name "*.cs" -print 2>/dev/null || true
 
-      # In nội dung các file C# nếu có
       - name: Show generated C# files
         run: |
           CSFILES=$(find build-app -type f -name "*.cs" 2>/dev/null || true)
@@ -276,7 +255,6 @@ jobs:
             echo "No generated .cs files found."
           fi
 
-      # Kiểm tra csproj có sinh ra không
       - name: Check generated project files
         run: |
           echo "===== Search for .csproj ====="
@@ -285,7 +263,6 @@ jobs:
           echo "===== Search for OtterkitLibrary refs ====="
           grep -R "OtterkitLibrary" build-app/.otterkit 2>/dev/null || true
 
-      # Nén output để tải về phân tích
       - name: Package build output
         run: |
           cd build-app
