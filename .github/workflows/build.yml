@@ -1,6 +1,22 @@
-       IDENTIFICATION DIVISION.
-       PROGRAM-ID. HELLO.
+name: Build COBOL
 
-       PROCEDURE DIVISION.
-           DISPLAY "HELLO FROM OTTERKIT GITHUB ACTIONS".
-           STOP RUN.
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - run: dotnet tool install --global Otterkit --version 1.0.80
+      - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - run: mkdir -p src/.otterkit/OtterkitExport
+      - run: otterkit --version
+
+      - working-directory: src
+        run: otterkit build -e HELLO.cob --free
