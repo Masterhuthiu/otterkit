@@ -1,22 +1,79 @@
-name: Build COBOL
+name: Build COBOL with Otterkit CLI
 
-on: [push, workflow_dispatch]
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '7.0.x'
 
-      - run: dotnet tool install --global Otterkit --version 1.0.80
-      - run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      - name: Install Otterkit templates
+        run: dotnet new install Otterkit.Templates::1.7.50
 
-      - run: mkdir -p src/.otterkit/OtterkitExport
-      - run: otterkit --version
+      - name: Install Otterkit CLI
+        run: dotnet tool install --global Otterkit --version 1.0.80
 
-      - working-directory: src
-        run: otterkit build -e HELLO.cob --free
+      - name: Add dotnet tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify Otterkit
+        run: otterkit --version
+
+      - name: Create source file if missing
+        run: |
+          mkdir -p src
+          if [ ! -f src/HELLO.cob ]; then
+            cat > src/HELLO.cob <<'EOF'
+                 IDENTIFICATION DIVISION.
+                 PROGRAM-ID. HELLO.
+
+                 PROCEDURE DIVISION.
+                     DISPLAY "HELLO FROM OTTERKIT GITHUB ACTIONS".
+                     STOP RUN.
+            EOF
+          fi
+          ls -la src
+
+      - name: Create Otterkit app project
+        run: |
+          rm -rf build-app
+          mkdir -p build-app
+          cd build-app
+          otterkit new app
+          ls -la
+          find . -maxdepth 3 -type f | sort
+
+      - name: Copy COBOL source into project
+        run: |
+          cp src/HELLO.cob build-app/main.cob
+          ls -la build-app
+
+      - name: Build COBOL project
+        working-directory: build-app
+        run: otterkit build -e main.cob --free
+
+      - name: Show generated files
+        if: always()
+        run: |
+          echo "===== BUILD-APP TREE ====="
+          find build-app -maxdepth 6 -type f | sort
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: otterkit-build-output
+          path: |
+            build-app/**
