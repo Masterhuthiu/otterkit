@@ -7,43 +7,81 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-cobol:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout source
+      - name: Checkout repo with submodules
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Setup .NET 7
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '7.0.x'
 
-      - name: Cache NuGet packages
+      - name: Cache NuGet
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets', '**/*.sln') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Install Otterkit CLI
-        run: dotnet tool install --global Otterkit --version 1.0.80
+      - name: Restore compiler
+        run: dotnet restore ./src
 
-      - name: Add dotnet tools to PATH
-        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+      - name: Build compiler
+        run: dotnet build ./src -c Release --no-restore
 
-      - name: Verify Otterkit
-        run: otterkit --version
+      - name: Show repo tree
+        run: |
+          pwd
+          ls -la
+          ls -la src
 
-      - name: Build COBOL
+      - name: Ensure test COBOL file exists
         working-directory: src
-        run: otterkit build -e HELLO.cob --free
+        run: |
+          if [ ! -f HELLO.cob ]; then
+            cat > HELLO.cob <<'EOF'
+                 IDENTIFICATION DIVISION.
+                 PROGRAM-ID. HELLO.
 
-      - name: Upload build artifacts
+                 PROCEDURE DIVISION.
+                     DISPLAY "HELLO FROM OTTERKIT ON GITHUB ACTIONS".
+                     STOP RUN.
+            EOF
+          fi
+          ls -la
+
+      - name: Prepare Otterkit working folders
+        working-directory: src
+        run: |
+          mkdir -p .otterkit/OtterkitExport
+          mkdir -p bin
+          mkdir -p obj
+          ls -la .otterkit
+          ls -la .otterkit/OtterkitExport
+
+      - name: Run Otterkit on HELLO.cob
+        working-directory: src
+        run: dotnet run -- build -e HELLO.cob --free
+
+      - name: Show generated files
+        if: always()
+        working-directory: src
+        run: |
+          echo "===== src tree ====="
+          find . -maxdepth 4 -type f | sort
+
+      - name: Upload artifacts
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: otterkit-build-output
+          name: cobol-build-output
           path: |
+            src/.otterkit/**
             src/bin/**
             src/obj/**
