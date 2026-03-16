@@ -33,8 +33,9 @@ jobs:
           dotnet --list-sdks
           dotnet --list-runtimes
 
+      # RẤT QUAN TRỌNG: dùng template version gần tool version
       - name: Install Otterkit templates
-        run: dotnet new install Otterkit.Templates::1.7.50
+        run: dotnet new install Otterkit.Templates::1.0.45-alpha
 
       - name: Install Otterkit CLI
         run: dotnet tool install --global Otterkit --version 1.0.80
@@ -72,46 +73,55 @@ jobs:
           rm -rf build-app
           otterkit new app build-app
           echo "===== build-app tree after otterkit new app ====="
-          find build-app -maxdepth 4 -type f | sort || true
+          find build-app -maxdepth 6 -type f | sort || true
+          echo "===== build-app dirs ====="
+          find build-app -maxdepth 4 -type d | sort || true
 
       - name: Replace default COBOL source with our file
         run: |
-          # tìm file .cob đầu tiên trong skeleton
           COBFILE=$(find build-app -type f \( -name "*.cob" -o -name "*.cbl" \) | head -n 1)
+
           echo "Found skeleton COBOL file: $COBFILE"
 
           if [ -n "$COBFILE" ]; then
             cp src/HELLO.cob "$COBFILE"
+            ENTRY_FILE="${COBFILE#build-app/}"
           else
-            # fallback nếu template không có file sẵn
             mkdir -p build-app/src
             cp src/HELLO.cob build-app/src/HELLO.cob
-            COBFILE="src/HELLO.cob"
+            ENTRY_FILE="src/HELLO.cob"
           fi
 
-          echo "ENTRY_FILE=$COBFILE" >> $GITHUB_ENV
+          echo "ENTRY_FILE=$ENTRY_FILE" >> $GITHUB_ENV
 
-          echo "===== final COBOL file ====="
-          cat "build-app/$COBFILE" 2>/dev/null || cat "$COBFILE"
+          echo "===== final entry file ====="
+          echo "$ENTRY_FILE"
+          cat "build-app/$ENTRY_FILE"
+
+      - name: Create missing Otterkit export folder
+        run: |
+          mkdir -p build-app/.otterkit/OtterkitExport
+          echo "===== ensured export folder ====="
+          find build-app/.otterkit -maxdepth 3 -type d | sort || true
 
       - name: Show build-app layout before build
         run: |
           echo "===== build-app layout ====="
-          find build-app -maxdepth 6 -type f | sort || true
+          find build-app -maxdepth 8 -type f | sort || true
+          echo "===== build-app dirs ====="
+          find build-app -maxdepth 6 -type d | sort || true
 
       - name: Build with Otterkit
         run: |
           cd build-app
-          echo "Using entry file: ${ENTRY_FILE#build-app/}"
-          # normalize path if it already starts with build-app/
-          ENTRY="${ENTRY_FILE#build-app/}"
-          otterkit build -e "$ENTRY" --free
+          echo "Using entry file: $ENTRY_FILE"
+          otterkit build -e "$ENTRY_FILE" --free
 
       - name: Show generated files after build
         if: always()
         run: |
           echo "===== build-app tree ====="
-          find build-app -maxdepth 8 -type f | sort || true
+          find build-app -maxdepth 10 -type f | sort || true
 
           echo "===== search for OtterkitLibrary references ====="
           grep -R "using OtterkitLibrary" -n build-app || true
@@ -124,6 +134,11 @@ jobs:
           if [ -f build-app/.otterkit/OtterkitExport/Startup.cs ]; then
             echo "===== Startup.cs ====="
             sed -n '1,200p' build-app/.otterkit/OtterkitExport/Startup.cs
+          fi
+
+          if [ -f build-app/.otterkit/OtterkitExport/OtterkitExport.csproj ]; then
+            echo "===== OtterkitExport.csproj ====="
+            sed -n '1,200p' build-app/.otterkit/OtterkitExport/OtterkitExport.csproj
           fi
 
       - name: Upload artifacts
