@@ -1,0 +1,49 @@
+name: Build COBOL with Otterkit
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 7
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '7.0.x'
+
+      - name: Cache NuGet packages
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj', '**/*.props', '**/*.targets') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Install Otterkit CLI
+        run: dotnet tool install --global Otterkit --version 1.0.80
+
+      - name: Add dotnet tools to PATH
+        run: echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify Otterkit
+        run: otterkit --version
+
+      - name: Build COBOL
+        working-directory: src
+        run: otterkit build -e HELLO.cob --free
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: otterkit-build-output
+          path: |
+            src/bin/**
+            src/obj/**
